@@ -116,13 +116,21 @@ class LearningPathController extends Controller
 
         $modules = LearningModule::where('career_id', $user->career_goal_id)
             ->orderBy('order')
-            ->with(['userProgress' => fn ($q) => $q->where('user_id', $user->id)])
+            ->with(['assignments', 'userProgress' => fn ($q) => $q->where('user_id', $user->id)])
             ->get();
 
         $totalModules = $modules->count();
         $completedModules = $modules->filter(
             fn ($m) => $m->userProgress->first()?->status === 'completed'
         )->count();
+
+        // estimasi total durasi program dari rentang due_date assignment yang sesungguhnya
+        // (bukan asumsi flat 2 minggu/modul) — +1 minggu untuk mewakili waktu kerja
+        // sebelum deadline assignment pertama jatuh tempo.
+        $dueDates = $modules->flatMap(fn ($m) => $m->assignments->pluck('due_date'))->filter();
+        $estimatedDurationWeeks = $dueDates->isNotEmpty()
+            ? (int) ceil($dueDates->min()->diffInDays($dueDates->max()) / 7) + 1
+            : $totalModules * 2; // fallback kalau belum ada assignment sama sekali
 
         return response()->json([
             'overall_progress' => [
@@ -131,7 +139,7 @@ class LearningPathController extends Controller
             ],
             'total_lessons' => $modules->sum('total_lessons'),
             'total_assignments' => $modules->sum('total_assignments'),
-            'estimated_duration_weeks' => $totalModules * 2,
+            'estimated_duration_weeks' => $estimatedDurationWeeks,
             'modules' => $modules->map(fn ($m) => [
                 'id' => $m->id,
                 'title' => $m->title,
@@ -154,7 +162,7 @@ class LearningPathController extends Controller
         $user = $request->user();
 
         $module->load([
-            'lessons',
+            'lessons.userProgress' => fn ($q) => $q->where('user_id', $user->id),
             'assignments.userProgress' => fn ($q) => $q->where('user_id', $user->id),
             'userProgress' => fn ($q) => $q->where('user_id', $user->id),
         ]);
@@ -169,6 +177,7 @@ class LearningPathController extends Controller
                 'title' => $l->title,
                 'type' => $l->type,
                 'duration_minutes' => $l->duration_minutes,
+                'completed' => $l->userProgress->first()?->completed ?? false,
             ]),
             'assignments' => $module->assignments->map(fn ($a) => [
                 'id' => $a->id,
@@ -176,6 +185,10 @@ class LearningPathController extends Controller
                 'description' => $a->description,
                 'due_date' => $a->due_date,
                 'status' => $a->userProgress->first()?->status ?? 'pending',
+                'file_name' => $a->userProgress->first()?->file_name,
+                'file_url' => $a->userProgress->first()?->file_path
+                    ? \Illuminate\Support\Facades\Storage::disk('public')->url($a->userProgress->first()->file_path)
+                    : null,
             ]),
         ]);
     }

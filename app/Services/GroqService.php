@@ -16,9 +16,11 @@ class GroqService
     public function __construct()
     {
         $this->apiKey = config('services.groq.api_key', '');
-        // Cek model terbaru yang tersedia di console.groq.com/docs/models sebelum deploy,
-        // nama model Groq berubah cukup sering.
-        $this->model = config('services.groq.model', 'llama-3.3-70b-versatile');
+        // PENTING: llama-3.3-70b-versatile resmi di-deprecate Groq per 17 Juni 2026,
+        // shutdown 16 Agustus 2026. Model default sekarang pakai pengganti resminya,
+        // openai/gpt-oss-120b. Cek ulang https://console.groq.com/docs/deprecations
+        // sebelum deploy — daftar model & tanggal shutdown Groq sering berubah.
+        $this->model = config('services.groq.model', 'openai/gpt-oss-120b');
     }
 
     /**

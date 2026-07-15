@@ -6,14 +6,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class UserAssignmentProgress extends Model
+class UserLessonProgress extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'assignment_id', 'status', 'file_path', 'file_name', 'submitted_at'];
+    protected $fillable = ['user_id', 'lesson_id', 'completed', 'completed_at'];
 
     protected $casts = [
-        'submitted_at' => 'datetime',
+        'completed' => 'boolean',
+        'completed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -21,8 +22,8 @@ class UserAssignmentProgress extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function assignment(): BelongsTo
+    public function lesson(): BelongsTo
     {
-        return $this->belongsTo(Assignment::class);
+        return $this->belongsTo(Lesson::class);
     }
 }

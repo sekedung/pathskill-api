@@ -47,7 +47,7 @@ class DashboardController extends Controller
             ->keyBy('assignment_id');
 
         $pendingAssignments = 0;
-        $assignmentList = [];
+        $allAssignments = [];
 
         foreach ($modules as $module) {
             foreach ($module->assignments as $assignment) {
@@ -55,7 +55,7 @@ class DashboardController extends Controller
                 if ($status !== 'successful') {
                     $pendingAssignments++;
                 }
-                $assignmentList[] = [
+                $allAssignments[] = [
                     'id' => $assignment->id,
                     'title' => $assignment->title,
                     'module_title' => $module->title,
@@ -65,14 +65,22 @@ class DashboardController extends Controller
             }
         }
 
-        // urutkan berdasarkan due_date terdekat, ambil 5 teratas untuk ditampilkan
+        // urutkan berdasarkan due_date terdekat, ambil 5 teratas untuk ditampilkan di dashboard
+        $assignmentList = $allAssignments;
         usort($assignmentList, fn ($a, $b) => strcmp((string) $a['due_date'], (string) $b['due_date']));
         $assignmentList = array_slice($assignmentList, 0, 5);
 
-        // estimasi minggu tersisa: total minggu program (asumsi 2 minggu/modul) - minggu yang sudah lewat
-        $estimatedTotalWeeks = $totalModules * 2;
-        $weeksElapsed = $completedModules * 2;
-        $weeksRemaining = max($estimatedTotalWeeks - $weeksElapsed, 0);
+        // weeks_remaining dihitung dari due_date assignment yang BELUM selesai paling akhir
+        // (bukan asumsi flat per modul) — jadi akurat mengikuti jadwal yang benar-benar
+        // tersimpan di database (baik dari seeder maupun hasil generate AI).
+        $latestPendingDueDate = collect($allAssignments)
+            ->filter(fn ($a) => $a['status'] !== 'successful' && $a['due_date'])
+            ->map(fn ($a) => \Illuminate\Support\Carbon::parse($a['due_date']))
+            ->max();
+
+        $weeksRemaining = $latestPendingDueDate
+            ? max((int) ceil(now()->diffInDays($latestPendingDueDate, false) / 7), 0)
+            : 0;
 
         $activeModules = $modules->take(3)->map(fn ($m) => [
             'id' => $m->id,
